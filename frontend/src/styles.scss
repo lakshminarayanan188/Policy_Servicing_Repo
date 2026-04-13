@@ -1,0 +1,66 @@
+// Custom Theme and Global Styles
+@use '@angular/material' as mat;
+
+@include mat.core();
+@import '@angular/material/prebuilt-themes/indigo-pink.css';
+
+// Define colors based on the design requirements
+$navy-sidebar: #1A2B4C;
+$teal-accent: #0EA5A0;
+$blue-extract: #3B82F6;
+$indigo-approve: #6366F1;
+$amber-tech: #F59E0B;
+$orange-sanction: #F97316;
+$green-paid: #22C55E;
+
+$bg-light: #F8FAFC;
+$text-primary: #1E293B;
+$text-muted: #64748B;
+$card-bg: #FFFFFF;
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Inter', 'Roboto', sans-serif;
+  background-color: $bg-light;
+  color: $text-primary;
+  font-size: 14px;
+}
+
+// Global utility classes for colors
+.text-primary { color: $text-primary; }
+.text-muted { color: $text-muted; }
+.bg-navy { background-color: $navy-sidebar; color: white; }
+.text-teal { color: $teal-accent; }
+.bg-teal { background-color: $teal-accent; color: white; }
+
+.stage-blue { color: $blue-extract; border-color: $blue-extract; }
+.bg-stage-blue { background-color: rgba($blue-extract, 0.1); color: $blue-extract; }
+
+.stage-indigo { color: $indigo-approve; border-color: $indigo-approve; }
+.bg-stage-indigo { background-color: rgba($indigo-approve, 0.1); color: $indigo-approve; }
+
+.stage-amber { color: $amber-tech; border-color: $amber-tech; }
+.bg-stage-amber { background-color: rgba($amber-tech, 0.1); color: $amber-tech; }
+
+.stage-orange { color: $orange-sanction; border-color: $orange-sanction; }
+.bg-stage-orange { background-color: rgba($orange-sanction, 0.1); color: $orange-sanction; }
+
+.stage-green { color: $green-paid; border-color: $green-paid; }
+.bg-stage-green { background-color: rgba($green-paid, 0.1); color: $green-paid; }
+
+// Common Animations
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
