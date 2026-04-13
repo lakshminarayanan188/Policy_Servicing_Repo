@@ -1,0 +1,250 @@
+**Phase 1 development prompt + architecture plan** — production-grade and ready to hand to your team or use with an AI code assistant:
+
+---
+
+## Full Development Prompt for Your Team / AI Assistant
+
+---
+
+### 🧭 Project Context
+
+> You are building ** PolicyServicing Dashboard** — an internal operations platform for a **Policy Servicing team** that handles insurance/financial policy payouts. The application manages payout workflows across stages (Extract → Approve → Tech Bucket → Sanction → Paid) across multiple product modules (SB, Maturity, Annuity, etc.).
+>
+> **Tech Stack:** Angular 17+ (standalone components, signals), Spring Boot 3.x, Oracle DB 19c, JWT authentication.
+> **Phase 1 scope:** Dashboard screen + Scheduler screen.
+> **Architecture must be extensible** for Phase 2 (reports, alerts, exports) and Phase 3 (analytics, audit trail).
+
+---
+
+### 🏗️ Architecture Principles (Phase 1 onwards)
+
+**Frontend (Angular):**
+- Use **standalone components** with lazy-loaded feature modules (`DashboardModule`, `SchedulerModule`, `SharedModule`)
+- Use **NgRx or Signal-based state** for dashboard filters (module, productId, date range)
+- Create a centralized `ApiService` with interceptors for JWT injection, error handling, and loading state
+- Use `environment.ts` for base URLs — never hardcode
+- Create reusable UI components: `StageCardComponent`, `FilterBarComponent`, `DataTableComponent`, `BadgeComponent`
+- Use Angular Material or PrimeNG for the component library
+- All HTTP calls go through feature-specific service files (`DashboardService`, `SchedulerService`)
+
+**Backend (Spring Boot):**
+- Follow **layered architecture**: Controller → Service → Repository
+- Use `@RestController` with versioned APIs: `/api/v1/dashboard/...`, `/api/v1/scheduler/...`
+- Use **Spring Security with JWT** — stateless, role-based (`ROLE_VIEWER`, `ROLE_ADMIN`)
+- Use **Spring Data JPA + Native Queries** for Oracle-specific SQL (analytical functions, partitions)
+- Use **DTOs** (not entities) in API responses — use MapStruct for mapping
+- Global exception handler with `@ControllerAdvice`
+- Use **Spring Scheduler / Quartz** for actual scheduler management
+
+**Database (Oracle):**
+- Use **sequences and triggers** for primary keys
+- All queries should use **bind variables** (never string concatenation)
+- Create **database views** for stage count aggregations (used by dashboard)
+- Indexes on: `module_code`, `product_id`, `stage_code`, `created_date`, `scheduler_name`
+
+---
+
+### 📱 Screen 1: Dashboard
+
+**UI Layout:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  [Side Menu]  │  POLICY SERVICING DASHBOARD             │
+│               │  ┌──────────┐ ┌────────────────────┐    │
+│  > Dashboard  │  │ Module ▼ │ │ Product ID ▼       │    │
+│  > Schedulers │  │ SB/Mat.. │ │ All / P001 / P002  │    │
+│               │  └──────────┘ └────────────────────┘    │
+│               │                                         │
+│               │  [Extract]  [Approve]  [Tech Bucket]    │
+│               │  Count: 120  Count: 84  Count: 31       │
+│               │                                         │
+│               │  [Sanction]  [Paid]  [Total Pending]    │
+│               │  Count: 22   Count: 410  Count: 257     │
+│               │           Grand total of all policies   │
+│               │  ┌────────────────────────────────────┐ │
+│               │  │  Stage-wise trend chart (last 7d)  │ │
+│               │  └────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Required Features:**
+1. **Module dropdown** — Values: SB, Maturity, Annuity, Surrender, Death Claim (configurable from DB, not hardcoded)
+2. **Product ID dropdown** — Dynamically loaded based on selected module via API call
+3. **Stage count cards** — Each card shows: stage name, count, % change from yesterday (↑↓ indicator), animated counter on load
+4. **Click-to-drill-down** — Clicking any stage card downloads/shows a data grid of policies in that stage for the selected module + product
+5. **Date range filter** — Today / This Week / This Month / Custom Range
+6. **Auto-refresh toggle** — Refresh every 5 minutes with a visible countdown timer
+7. **Export button** — Export drill-down data to Excel/CSV
+
+**Additional Ideas (implement in Phase 1 or flag for Phase 2):**
+- **Aging indicator** on each stage card: e.g. "18 records pending > 3 days" in amber/red
+- **Sparkline mini-chart** inside each stage card showing 7-day trend
+- **Summary bar** at top: Total Policies Today | Amount in Pipeline | SLA Breaches
+- **Module comparison view** toggle: see all modules side-by-side in a compact table
+
+**API Endpoints (Spring Boot):**
+```
+GET /api/v1/dashboard/modules                          → List of module codes
+GET /api/v1/dashboard/products?module={code}           → Product IDs for module
+GET /api/v1/dashboard/stage-counts?module=&productId=&dateRange=  → Stage counts
+GET /api/v1/dashboard/stage-drill?stage=&module=&productId=&page=&size= → Paginated records
+GET /api/v1/dashboard/trend?module=&productId=&days=7  → Daily count per stage
+```
+
+**Oracle DB Tables/Views:**
+```sql
+-- Core table (already exists in your system, adapt as needed)
+POLICY_TRANSACTION (policy_no, module_code, product_id, stage_code, created_date, updated_date, amount, status)
+
+-- Materialized view for fast dashboard counts (refresh every 5 min)
+CREATE MATERIALIZED VIEW MV_STAGE_COUNTS
+REFRESH FAST ON DEMAND AS
+SELECT module_code, product_id, stage_code, COUNT(*) as cnt, TRUNC(created_date) as txn_date
+FROM POLICY_TRANSACTION
+GROUP BY module_code, product_id, stage_code, TRUNC(created_date);
+```
+
+---
+
+### ⏱️ Screen 2: Scheduler Management
+
+**UI Layout:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  [Side Menu]  │  SCHEDULER MANAGEMENT                   │
+│               │                                         │
+│  > Dashboard  │  [Search by name...]  [Status ▼] [Run ▼]│
+│  > Schedulers │                                         │
+│               │  ┌──────────────────────────────────────┐│
+│               │  │ Name │ Last Run │ Next Run │ Freq │...││
+│               │  │ ─────│──────────│──────────│──────│───││
+│               │  │ SB.. │ 09:00 AM │ 09:05 AM │ 5min │ ● ││
+│               │  └──────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────┘
+```
+
+**Table Columns:**
+| Column | Description |
+|---|---|
+| Scheduler Name | Human-readable name |
+| Job Class | Spring/Quartz job class identifier |
+| Last Run Time | Timestamp of last execution |
+| Last Run Status | SUCCESS / FAILED / RUNNING (color-coded badge) |
+| Next Run Time | Calculated from cron |
+| Frequency / Cron | e.g. "Every 5 min" or raw cron |
+| Records Processed | Count from last run |
+| Duration (sec) | Last run duration |
+| Error Message | Truncated, expandable on click |
+| Actions | Run Now / Enable / Disable |
+
+**Features:**
+1. **Global search** by scheduler name
+2. **Filter by status** — All / Running / Success / Failed / Disabled
+3. **Filter by module** — which module this scheduler belongs to
+4. **Manual trigger** — "Run Now" button with confirmation dialog, shows live progress
+5. **Run history drawer** — click a row to see last N executions with status, timestamps, durations
+6. **Enable/Disable toggle** — with role-based access (only ADMIN)
+7. **Cron editor** — inline editable cron expression with human-readable preview
+8. **Alert config** — set email/notification if scheduler fails X times in a row
+
+**New Ideas for Schedulers (Phase 1 + future):**
+- **Health heatmap** — calendar view showing daily success/failure per scheduler (like GitHub contributions)
+- **Dependency graph** — if scheduler B depends on scheduler A completing, show a mini DAG
+- **SLA warnings** — highlight in amber if a scheduler hasn't run within its expected window
+- **Scheduler grouping** — group by module (SB group, Maturity group) with collapse/expand
+- **Audit log panel** — who triggered manual runs, who changed cron, timestamp + username
+
+**API Endpoints:**
+```
+GET  /api/v1/schedulers                        → List all with latest status
+GET  /api/v1/schedulers/{id}/history?limit=20  → Run history
+POST /api/v1/schedulers/{id}/trigger           → Manual run
+PUT  /api/v1/schedulers/{id}/toggle            → Enable/Disable
+PUT  /api/v1/schedulers/{id}/cron              → Update schedule
+GET  /api/v1/schedulers/{id}/logs              → Live log stream (SSE)
+```
+
+---
+
+### 🎨 UI/UX Design Requirements
+
+```
+Design Language: Clean enterprise dashboard, dark sidebar + light content area
+Primary color: Deep navy (#1A2B4C) for sidebar
+Accent: Teal (#0EA5A0) for active states and CTAs
+Stage card colors:
+  - Extract    → Blue  (#3B82F6)
+  - Approve    → Indigo (#6366F1)
+  - Tech Bucket → Amber (#F59E0B)
+  - Sanction   → Orange (#F97316)
+  - Paid       → Green (#22C55E)
+
+Animations:
+  - Stage count cards: animated number counter on load (0 → actual count, 800ms ease-out)
+  - Card hover: subtle lift (translateY -2px, shadow intensify)
+  - Sidebar: smooth collapse/expand with icons-only mode
+  - Table rows: fade-in on load (staggered, 50ms delay per row)
+  - Status badges: pulsing dot for RUNNING state
+  - Page transitions: fade + slide (150ms)
+
+Typography: Inter or Roboto, 14px base
+Spacing: 8px grid system
+```
+
+---
+
+### 🔒 Security (Phase 1)
+
+- JWT-based auth with refresh tokens (15min access, 7d refresh)
+- Role-based: `VIEWER` (read-only dashboard), `OPERATOR` (can trigger schedulers), `ADMIN` (full access)
+- All API responses sanitized — no internal stack traces to frontend
+- Audit table: log every manual scheduler trigger with user + timestamp
+
+---
+
+### 📁 Suggested Project Structure
+
+**Angular:**
+```
+src/app/
+  core/              ← Auth, interceptors, guards, models
+  shared/            ← Reusable components, pipes, directives
+  features/
+    dashboard/       ← Dashboard module + components
+    scheduler/       ← Scheduler module + components
+  layout/            ← Sidebar, header, shell
+```
+
+**Spring Boot:**
+```
+src/main/java/com/company/policyserve/
+  config/            ← Security, Swagger, CORS
+  controller/        ← REST controllers
+  service/           ← Business logic
+  repository/        ← JPA repos + native queries
+  dto/               ← Request/Response DTOs
+  entity/            ← JPA entities
+  exception/         ← Custom exceptions + handler
+  scheduler/         ← Quartz job classes
+```
+
+---
+
+### 💡 Additional Tech Recommendations
+
+| Area | Recommendation | Reason |
+|---|---|---|
+| API Docs | Springdoc OpenAPI (Swagger UI) | Auto-generated, team can test without Postman |
+| Caching | Spring Cache + Redis (or Caffeine for in-memory) | Dashboard counts hit DB every load — cache 1–5 min |
+| Logging | Logback + ELK stack or Splunk | Scheduler failure root-cause analysis |
+| DB Connection | HikariCP (default in Spring Boot) | Oracle connection pooling, set max-pool-size=20 |
+| Job Scheduling | Quartz Scheduler (clustered) | Better than `@Scheduled` for Phase 2 distributed runs |
+| Excel Export | Apache POI (already in Spring ecosystem) | Export drill-down data |
+| Testing | JUnit 5 + Mockito, Jasmine/Karma | Unit + integration tests from day one |
+| CI/CD | Jenkins or GitHub Actions | Build → test → deploy pipeline |
+
+---
+
+This gives you a complete foundation. Your team can take this prompt directly into development or feed it to an AI code assistant to scaffold each layer.

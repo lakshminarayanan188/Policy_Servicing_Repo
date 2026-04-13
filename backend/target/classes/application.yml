@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: policyserve
+  
+  # Database Configuration (Dummy Setup - please fill your actual credentials)
+  datasource:
+    url: jdbc:oracle:thin:@//localhost:1521/XEPDB1
+    username: sys as sysdba
+    password: password
+    driver-class-name: oracle.jdbc.OracleDriver
+  
+  jpa:
+    hibernate:
+      ddl-auto: none # Change to update or create if you want JPA to auto-create tables
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.OracleDialect
+  
+  # Quartz Scheduler config
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: never
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework.web: INFO
+    com.company.policyserve: DEBUG
+    
+# JWT Configuration
+jwt:
+  secret: 49D0E767E33F9DBF7A0284D60AD31C6EDAD7A64C2E9FA33F2356B24953B3C8E4
+  expiration-ms: 900000 # 15 minutes
+  refresh-expiration-ms: 604800000 # 7 days
